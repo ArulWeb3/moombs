@@ -1,233 +1,431 @@
-# Cursor Rules for Moombs Project - Odoo 18 Enterprise Edition Standards
+# Cursor Rules for Moombs Project - Odoo 18 EE Standards with Examples
 
 ## Python Model Development
 glob: **/models/**/*.py
-description: Odoo 18 EE model development standards and best practices
+description: Odoo 18 EE model development standards with practical examples
 rules:
-  - Use proper class inheritance:
-    - models.Model for regular models
-    - models.TransientModel for wizards
-    - models.AbstractModel for mixins
-  - Field definitions:
-    - Use new-style fields (fields.Char, not char)
-    - Define compute methods with @api.depends
-    - Use store=True for frequently accessed computed fields
-    - Define proper ondelete for Many2one fields
-    - Use currency_field for Monetary fields
-    - Set proper string, help attributes
-    - Use groups attribute for field-level access control
-  - Method decorators:
-    - @api.model for static methods
-    - @api.model_create_multi for batch creation
-    - @api.depends for computed fields
-    - @api.depends_context for context-dependent computations
-    - @api.onchange for UI feedback
-    - @api.constrains for validation
-    - @api.returns for method return type hints
-  - Performance optimization:
-    - Use prefetch_fields for batch operations
-    - Implement proper search methods
-    - Use sudo() carefully and document its usage
-    - Implement pagination for large datasets
-  - Security:
-    - Define proper ir.model.access records
-    - Implement record rules using ir.rule
-    - Use proper sudo() context management
-    - Implement proper multi-company rules
-  - Data handling:
-    - Use proper ORM methods (create, write, unlink)
-    - Avoid direct SQL unless absolutely necessary
-    - Handle recordsets properly
-    - Implement proper error handling
-  - Code organization:
-    - Group related models in same file
-    - Use proper imports
-    - Define constants at module level
-    - Use proper naming conventions
+  - Model definition examples:
+    ```python
+    from odoo import models, fields, api
+    from odoo.exceptions import ValidationError
+    
+    class ProductCleansing(models.Model):
+        _name = 'product.cleansing'
+        _description = 'Product Data Cleansing'
+        _inherit = ['mail.thread', 'mail.activity.mixin']
+        _order = 'sequence, id'
+        
+        # Field definitions with best practices
+        name = fields.Char(
+            string='Name',
+            required=True,
+            translate=True,
+            tracking=True,
+            index=True
+        )
+        sequence = fields.Integer(default=10)
+        
+        # Computed field with dependencies
+        total_products = fields.Integer(
+            compute='_compute_total_products',
+            store=True,
+            help='Total number of products to be processed'
+        )
+        
+        # Many2one with proper ondelete and domain
+        company_id = fields.Many2one(
+            'res.company',
+            string='Company',
+            required=True,
+            ondelete='restrict',
+            default=lambda self: self.env.company,
+            domain=lambda self: [('id', 'in', self.env.user.company_ids.ids)]
+        )
+        
+        # One2many with proper comodel definition
+        line_ids = fields.One2many(
+            'product.cleansing.line',
+            'cleansing_id',
+            string='Cleansing Lines',
+            copy=True
+        )
+        
+        # Monetary field with currency
+        budget = fields.Monetary(
+            string='Budget',
+            currency_field='currency_id'
+        )
+        currency_id = fields.Many2one(
+            'res.currency',
+            related='company_id.currency_id'
+        )
+        
+        @api.depends('line_ids.product_id')
+        def _compute_total_products(self):
+            for record in self:
+                record.total_products = len(record.line_ids)
+        
+        # Constraint example
+        @api.constrains('line_ids')
+        def _check_lines(self):
+            for record in self:
+                if not record.line_ids:
+                    raise ValidationError('At least one product line is required')
+        
+        # Onchange with domain example
+        @api.onchange('company_id')
+        def _onchange_company_id(self):
+            return {
+                'domain': {
+                    'line_ids': [('company_id', '=', self.company_id.id)]
+                }
+            }
+        
+        # Override create with proper multi support
+        @api.model_create_multi
+        def create(self, vals_list):
+            for vals in vals_list:
+                if not vals.get('name'):
+                    vals['name'] = self.env['ir.sequence'].next_by_code('product.cleansing')
+            return super().create(vals_list)
+    ```
 
 ## OWL Component Development
 glob: **/*.js
-description: Odoo 18 EE OWL component development standards
+description: OWL component examples for Odoo 18 EE
 rules:
-  - Component structure:
-    - Use proper class inheritance
-    - Define static template property
-    - Use proper lifecycle hooks
-    - Define props using static props property
-    - Use proper state management
-  - Template syntax:
-    - Use t-name for template names
-    - Use proper event binding (t-on)
-    - Use t-ref for DOM references
-    - Use proper conditional rendering (t-if)
-    - Use t-foreach for list rendering
-    - Use t-slot for content distribution
-  - State management:
-    - Use useState for reactive state
-    - Use useRef for DOM references
-    - Use useSubEnv for environment injection
-    - Use proper props validation
-  - Component communication:
-    - Use proper event handling
-    - Implement proper parent-child communication
-    - Use services for cross-component communication
-  - Performance:
-    - Use proper key attributes in lists
-    - Implement proper rendering optimization
-    - Use proper lifecycle hooks
-  - Error handling:
-    - Implement proper error boundaries
-    - Use proper error reporting
-    - Handle async operations properly
+  - Component example:
+    ```javascript
+    /** @odoo-module **/
+    
+    import { Component, useState, useRef } from "@odoo/owl";
+    import { useService } from "@web/core/utils/hooks";
+    
+    export class ProductCleansingKanban extends Component {
+        static template = "product_cleansing.KanbanView";
+        static props = {
+            record: { type: Object },
+            readonly: { type: Boolean, optional: true }
+        };
+        
+        setup() {
+            // State management
+            this.state = useState({
+                isEditing: false,
+                currentValue: this.props.record.data.name
+            });
+            
+            // Services
+            this.orm = useService("orm");
+            this.notification = useService("notification");
+            
+            // Refs
+            this.inputRef = useRef("nameInput");
+        }
+        
+        // Event handlers
+        async onSave() {
+            try {
+                await this.orm.write("product.cleansing", [this.props.record.id], {
+                    name: this.state.currentValue
+                });
+                this.notification.add("Record updated successfully", {
+                    type: "success"
+                });
+                this.state.isEditing = false;
+            } catch (error) {
+                this.notification.add("Failed to update record", {
+                    type: "danger"
+                });
+            }
+        }
+    }
+    ```
+
+  - Template example:
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <templates xml:space="preserve">
+        <t t-name="product_cleansing.KanbanView">
+            <div class="o_kanban_card" 
+                 t-att-class="{ 'o_kanban_ghost': !props.record }">
+                <div class="o_kanban_content">
+                    <!-- Conditional rendering -->
+                    <t t-if="state.isEditing">
+                        <input t-ref="nameInput"
+                               t-model="state.currentValue"
+                               class="o_input"
+                               t-on-keyup="onInputKeyup"/>
+                    </t>
+                    <t t-else="">
+                        <span t-on-click="() => state.isEditing = true">
+                            <t t-esc="props.record.data.name"/>
+                        </span>
+                    </t>
+                    
+                    <!-- Event handling -->
+                    <button t-if="state.isEditing"
+                            class="btn btn-primary"
+                            t-on-click="onSave">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </t>
+    </templates>
+    ```
 
 ## XML Views
 glob: **/views/**/*.xml
-description: Odoo 18 EE view development standards
+description: View examples for Odoo 18 EE
 rules:
-  - View architecture:
-    - Use proper inheritance (position attributes)
-    - Define proper view_mode attributes
-    - Use proper view priorities
-    - Implement proper groups for access control
-  - Form views:
-    - Use proper field widgets
-    - Group related fields
-    - Use proper statusbar
-    - Implement proper button states
-    - Use attrs for dynamic behavior
-  - List views:
-    - Define proper tree attributes
-    - Use proper column ordering
-    - Implement proper grouping
-    - Use proper decorations
-  - Search views:
-    - Define proper filters
-    - Implement proper grouping
-    - Use proper custom filters
-  - Kanban views:
-    - Use proper templates
-    - Implement proper states
-    - Use proper colors
-    - Define proper quick_create
-  - Calendar views:
-    - Define proper date fields
-    - Use proper colors
-    - Implement proper event handling
-  - Pivot views:
-    - Define proper measures
-    - Use proper grouping
-    - Implement proper calculations
+  - Form view example:
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <odoo>
+        <record id="view_product_cleansing_form" model="ir.ui.view">
+            <field name="name">product.cleansing.form</field>
+            <field name="model">product.cleansing</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <!-- Status bar with states -->
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,in_progress,done"/>
+                        <button name="action_start"
+                                string="Start Cleansing"
+                                type="object"
+                                class="btn-primary"
+                                attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <!-- Smart buttons -->
+                            <button name="action_view_products"
+                                    type="object"
+                                    class="oe_stat_button"
+                                    icon="fa-cubes">
+                                <field name="product_count" 
+                                       widget="statinfo"
+                                       string="Products"/>
+                            </button>
+                        </div>
+                        <group>
+                            <group>
+                                <!-- Fields with conditional attributes -->
+                                <field name="name"
+                                       attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                                <field name="company_id" 
+                                       groups="base.group_multi_company"/>
+                            </group>
+                        </group>
+                        <!-- Notebook with multiple pages -->
+                        <notebook>
+                            <page string="Products" name="products">
+                                <field name="line_ids" widget="one2many_list">
+                                    <tree editable="bottom">
+                                        <field name="product_id"/>
+                                        <field name="initial_state"/>
+                                        <field name="final_state"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <!-- Chatter integration -->
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+    </odoo>
+    ```
 
 ## Security Rules
 glob: **/security/**/*.xml
-description: Odoo 18 EE security implementation standards
+description: Security implementation examples
 rules:
-  - Access rights:
-    - Define proper model access rights
-    - Implement proper record rules
-    - Use proper groups
-    - Define proper field access rights
-  - Record rules:
-    - Use proper domain filters
-    - Implement multi-company rules
-    - Define proper global rules
-  - Group inheritance:
-    - Use proper group categories
-    - Implement proper implied_ids
-    - Define proper group hierarchy
-
-## Data Files
-glob: **/data/**/*.xml
-description: Odoo 18 EE data file standards
-rules:
-  - Data records:
-    - Use proper XML IDs
-    - Define proper noupdate flags
-    - Implement proper dependencies
-    - Use proper record references
-  - Demo data:
-    - Separate from production data
-    - Use proper naming conventions
-    - Implement proper test scenarios
-  - Configuration data:
-    - Use proper sequences
-    - Define proper default values
-    - Implement proper system parameters
-
-## JavaScript QWeb Templates
-glob: **/*.xml
-description: Odoo 18 EE QWeb template standards
-rules:
-  - Template structure:
-    - Use proper t-name attributes
-    - Implement proper inheritance
-    - Use proper widget references
-  - Dynamic rendering:
-    - Use proper t-esc for escaped output
-    - Use proper t-raw for raw output
-    - Implement proper conditions
-    - Use proper loops
-  - Widget integration:
-    - Use proper widget instantiation
-    - Implement proper event handling
-    - Use proper data binding
+  - Access rights example:
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <odoo>
+        <!-- Model access rights -->
+        <record id="model_access_product_cleansing_user" model="ir.model.access">
+            <field name="name">product.cleansing.user</field>
+            <field name="model_id" ref="model_product_cleansing"/>
+            <field name="group_id" ref="group_product_cleansing_user"/>
+            <field name="perm_read" eval="1"/>
+            <field name="perm_write" eval="1"/>
+            <field name="perm_create" eval="1"/>
+            <field name="perm_unlink" eval="0"/>
+        </record>
+        
+        <!-- Record rules -->
+        <record id="rule_product_cleansing_company" model="ir.rule">
+            <field name="name">Product Cleansing: Multi-company</field>
+            <field name="model_id" ref="model_product_cleansing"/>
+            <field name="domain_force">
+                ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+            </field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+        
+        <!-- Security groups -->
+        <record id="group_product_cleansing_user" model="res.groups">
+            <field name="name">Product Cleansing User</field>
+            <field name="category_id" ref="base.module_category_inventory"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+    </odoo>
+    ```
 
 ## Python Controllers
 glob: **/controllers/**/*.py
-description: Odoo 18 EE controller development standards
+description: Controller examples for Odoo 18 EE
 rules:
-  - Route definition:
-    - Use proper decorators
-    - Define proper auth methods
-    - Implement proper CSRF protection
-    - Use proper HTTP methods
-  - Request handling:
-    - Implement proper parameter validation
-    - Use proper response types
-    - Handle errors properly
-    - Implement proper session management
-  - Security:
-    - Use proper access control
-    - Implement proper input validation
-    - Use proper error handling
-    - Define proper content security
-
-## Module Structure
-glob: **/__manifest__.py
-description: Odoo 18 EE module structure standards
-rules:
-  - Manifest content:
-    - Define proper dependencies
-    - Use proper version numbers
-    - List all data files
-    - Define proper category
-    - List proper external dependencies
-  - Module organization:
-    - Follow standard directory structure
-    - Use proper file naming
-    - Implement proper init files
-    - Define proper load order
+  - REST API controller example:
+    ```python
+    from odoo import http
+    from odoo.http import request
+    from odoo.exceptions import AccessError
+    
+    class ProductCleansingAPI(http.Controller):
+        @http.route('/api/v1/product-cleansing', 
+                   type='json',
+                   auth='user',
+                   methods=['POST'],
+                   csrf=False)
+        def create_cleansing(self, **kwargs):
+            try:
+                # Input validation
+                if not kwargs.get('name'):
+                    return {'error': 'Name is required'}, 400
+                    
+                # Create record with proper error handling
+                cleansing = request.env['product.cleansing'].create({
+                    'name': kwargs.get('name'),
+                    'company_id': request.env.company.id,
+                })
+                
+                # Return formatted response
+                return {
+                    'id': cleansing.id,
+                    'name': cleansing.name,
+                    'state': cleansing.state,
+                    'product_count': cleansing.product_count,
+                }
+                
+            except AccessError:
+                return {'error': 'Access Denied'}, 403
+            except Exception as e:
+                return {'error': str(e)}, 500
+        
+        @http.route('/api/v1/product-cleansing/<int:id>',
+                   type='http',
+                   auth='user',
+                   methods=['GET'],
+                   csrf=True)
+        def get_cleansing(self, id):
+            try:
+                cleansing = request.env['product.cleansing'].browse(id)
+                cleansing.ensure_one()
+                
+                return request.make_response(
+                    json.dumps({
+                        'id': cleansing.id,
+                        'name': cleansing.name,
+                        'state': cleansing.state,
+                    }),
+                    headers=[('Content-Type', 'application/json')]
+                )
+                
+            except AccessError:
+                return request.not_found()
+    ```
 
 ## Testing
 glob: **/tests/**/*.py
-description: Odoo 18 EE testing standards
+description: Testing examples for Odoo 18 EE
 rules:
-  - Test structure:
-    - Use proper test classes
-    - Implement proper setUp methods
-    - Use proper test naming
-    - Define proper test scenarios
-  - Test coverage:
-    - Test all business logic
-    - Test edge cases
-    - Implement proper data cleanup
-    - Use proper assertions
-  - Performance testing:
-    - Test with large datasets
-    - Implement proper benchmarks
-    - Test concurrent access
-  - Integration testing:
-    - Test module interactions
-    - Test workflow scenarios
-    - Implement proper mocking
-    - Test API endpoints
+  - Test case examples:
+    ```python
+    from odoo.tests.common import TransactionCase, tagged
+    from odoo.exceptions import ValidationError
+    
+    @tagged('post_install', '-at_install')
+    class TestProductCleansing(TransactionCase):
+        def setUp(self):
+            super().setUp()
+            # Test data setup
+            self.company = self.env['res.company'].create({
+                'name': 'Test Company'
+            })
+            self.user = self.env['res.users'].create({
+                'name': 'Test User',
+                'login': 'test_user',
+                'company_id': self.company.id,
+                'company_ids': [(4, self.company.id)]
+            })
+            
+        def test_create_cleansing(self):
+            """Test product cleansing creation with validation"""
+            # Create with proper values
+            cleansing = self.env['product.cleansing'].with_user(self.user).create({
+                'name': 'Test Cleansing',
+                'company_id': self.company.id,
+            })
+            self.assertEqual(cleansing.state, 'draft')
+            
+            # Test constraints
+            with self.assertRaises(ValidationError):
+                cleansing.line_ids.unlink()
+            
+        def test_cleansing_workflow(self):
+            """Test complete cleansing workflow"""
+            cleansing = self.env['product.cleansing'].create({
+                'name': 'Test Workflow'
+            })
+            
+            # Test state transitions
+            cleansing.action_start()
+            self.assertEqual(cleansing.state, 'in_progress')
+            
+            # Test computed fields
+            cleansing.write({
+                'line_ids': [(0, 0, {
+                    'product_id': self.env.ref('product.product_product_1').id
+                })]
+            })
+            self.assertEqual(cleansing.total_products, 1)
+            
+        def test_performance(self):
+            """Test performance with large datasets"""
+            # Create test data
+            products = self.env['product.product'].create([
+                {'name': f'Test Product {i}'} for i in range(100)
+            ])
+            
+            # Measure performance
+            with self.assertQueryCount(user=self.user, expected_count=3):
+                cleansing = self.env['product.cleansing'].create({
+                    'name': 'Performance Test',
+                    'line_ids': [(0, 0, {'product_id': p.id}) for p in products]
+                })
+    ```
+
+These examples demonstrate:
+- Proper code structure and organization
+- Best practices for each component type
+- Error handling and validation
+- Security implementation
+- Performance considerations
+- Testing strategies
+
+Would you like me to:
+1. Add more specific examples for any section?
+2. Include examples for additional use cases?
+3. Add more complex workflow examples?
+4. Include examples for specific Odoo 18 EE features?
