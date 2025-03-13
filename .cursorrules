@@ -1,0 +1,46 @@
+# Cursor Rules for Moombs Project
+
+## Odoo Compliance
+glob: **/*.py
+description: Ensure Odoo coding standards and best practices are followed
+rules:
+  - All Python files should have proper docstrings following Odoo standards
+  - Use snake_case for method and variable names
+  - Class names should use CamelCase
+  - Model names should be lowercase with underscores
+  - Field names should be lowercase with underscores
+  - Security rules must be defined for all models
+  - Use proper Odoo decorators (@api.model, @api.depends, etc.)
+  - Follow Odoo's ORM methods instead of raw SQL
+  - Include proper license headers in module files
+  - Use translation markers (_) for user-facing strings
+  - Follow Odoo's module structure:
+    - __init__.py
+    - __manifest__.py
+    - models/
+    - views/
+    - security/
+    - data/
+  - Use proper version numbers in manifest
+  - Define dependencies correctly in manifest
+  - Use proper XML IDs for views and data
+  - Follow Odoo's view inheritance patterns
+  - Use proper field attributes (required, readonly, states, etc.)
+  - Implement proper access rights and record rules
+  - Use proper import statements
+  - Follow PEP 8 guidelines with Odoo exceptions
+
+## API Development
+glob: **/api/**/*.py
+description: Guidelines for API development
+rules:
+  - Use proper HTTP methods (GET, POST, PUT, DELETE)
+  - Implement proper error handling
+  - Use proper status codes
+  - Document all endpoints
+  - Implement proper validation
+  - Use proper security measures
+  - Follow RESTful principles
+  - Implement proper rate limiting
+  - Use proper versioning
+  - Implement proper logging
